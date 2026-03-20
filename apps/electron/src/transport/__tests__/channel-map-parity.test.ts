@@ -12,7 +12,37 @@ type BrowserPaneKeys = `browserPane.${FunctionKeys<ElectronAPI['browserPane']>}`
 
 type ApiToChannelMapKeys = Exclude<
   FunctionKeys<ElectronAPI>,
-  'performOAuth' | 'getTransportConnectionState' | 'onTransportConnectionStateChanged' | 'reconnectTransport' | 'isChannelAvailable'
+  'performOAuth'
+  | 'getTransportConnectionState'
+  | 'onTransportConnectionStateChanged'
+  | 'reconnectTransport'
+  | 'isChannelAvailable'
+  | 'getRemoteServerRuntimeStates'
+  | 'onWorkspacesChanged'
+  | 'createWorkspaceAtTarget'
+  | 'checkWorkspaceSlugAtTarget'
+  | 'listServerDirectoryForTarget'
+  | 'getHomeDirForTarget'
+  | 'listLlmConnectionsForTarget'
+  | 'listLlmConnectionsWithStatusForTarget'
+  | 'getLlmConnectionForTarget'
+  | 'getLlmConnectionApiKeyForTarget'
+  | 'saveLlmConnectionForTarget'
+  | 'deleteLlmConnectionForTarget'
+  | 'testLlmConnectionForTarget'
+  | 'setDefaultLlmConnectionForTarget'
+  | 'getDefaultThinkingLevelForTarget'
+  | 'setDefaultThinkingLevelForTarget'
+  | 'startClaudeOAuthForTarget'
+  | 'exchangeClaudeCodeForTarget'
+  | 'clearClaudeOAuthStateForTarget'
+  | 'setupLlmConnectionForTarget'
+  | 'testLlmConnectionSetupForTarget'
+  | 'startChatGptOAuthForTarget'
+  | 'startCopilotOAuthForTarget'
+  | 'shareLlmConnectionToTarget'
+  | 'shareSourceToWorkspace'
+  | 'shareSkillToWorkspace'
 > | BrowserPaneKeys
 type ChannelMapKeys = keyof typeof CHANNEL_MAP & string
 
