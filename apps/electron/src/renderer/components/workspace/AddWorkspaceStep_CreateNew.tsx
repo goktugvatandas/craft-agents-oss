@@ -117,8 +117,8 @@ export function AddWorkspaceStep_CreateNew({
 
   const handleCreate = useCallback(async () => {
     if (!name.trim() || !finalPath || error) return
-    await onCreate(finalPath, name.trim(), { managedByApp: true })
-  }, [name, finalPath, error, onCreate])
+    await onCreate(finalPath, name.trim(), { managedByApp: locationOption === 'default' })
+  }, [name, finalPath, error, onCreate, locationOption])
 
   const canCreate = !!target && !!name.trim() && !!finalPath && !error && !isValidating && !isCreating
 
