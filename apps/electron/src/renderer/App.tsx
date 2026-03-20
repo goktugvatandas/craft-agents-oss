@@ -209,6 +209,8 @@ export default function App() {
   const [workspaceDefaultLlmConnection, setWorkspaceDefaultLlmConnection] = useState<string | undefined>()
   // Global default LLM connection slug (from app config)
   const [defaultLlmConnectionSlug, setDefaultLlmConnectionSlug] = useState<string | undefined>()
+  const llmConnectionsRequestIdRef = useRef(0)
+  const readyLoadRequestIdRef = useRef(0)
 
   // Derive connection default model override from the default LLM connection
   const defaultConnection = useMemo(() => {
@@ -431,12 +433,15 @@ export default function App() {
 
   // Refresh LLM connections from config (called on workspace change and after connection updates)
   const refreshLlmConnections = useCallback(async () => {
+    const requestId = ++llmConnectionsRequestIdRef.current
     const connections = await window.electronAPI.listLlmConnectionsWithStatus()
+    if (requestId !== llmConnectionsRequestIdRef.current) return
     setLlmConnections(connections)
     setDefaultLlmConnectionSlug(resolveDefaultConnectionSlug(connections))
     // Also refresh workspace default
     if (windowWorkspaceId) {
       const settings = await window.electronAPI.getWorkspaceSettings(windowWorkspaceId)
+      if (requestId !== llmConnectionsRequestIdRef.current) return
       setWorkspaceDefaultLlmConnection(settings?.defaultLlmConnection)
     }
   }, [resolveDefaultConnectionSlug, windowWorkspaceId])
@@ -540,8 +545,7 @@ export default function App() {
   useEffect(() => {
     if (appState !== 'ready') return
 
-    window.electronAPI.getWorkspaces().then(setWorkspaces)
-    window.electronAPI.getNotificationsEnabled().then(setNotificationsEnabled)
+    const requestId = ++readyLoadRequestIdRef.current
 
     // Show actionable toast for missing system dependencies (Windows only)
     window.electronAPI.getSystemWarnings().then((warnings) => {
@@ -556,55 +560,94 @@ export default function App() {
         })
       }
     }).catch(() => { /* non-fatal startup check */ })
-    window.electronAPI.getSessions().then(async (loadedSessions) => {
-      // Initialize per-session atoms and metadata map
-      // NOTE: No sessionsAtom used - sessions are only in per-session atoms
-      initializeSessions(loadedSessions)
-      // Initialize unified sessionOptions from session data
-      const optionsMap = new Map<string, SessionOptions>()
-      for (const s of loadedSessions) {
-        // Only store non-default options to keep the map lean
-        const hasNonDefaultMode = s.permissionMode && s.permissionMode !== 'ask'
-        const hasNonDefaultThinking = s.thinkingLevel && s.thinkingLevel !== DEFAULT_THINKING_LEVEL
-        if (hasNonDefaultMode || hasNonDefaultThinking) {
-          optionsMap.set(s.id, {
-            permissionMode: s.permissionMode ?? 'ask',
-            thinkingLevel: s.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
-          })
-        }
-      }
-      setSessionOptions(optionsMap)
 
-      // Reconcile permission mode state from backend diagnostics (mode + modeVersion)
-      await Promise.allSettled(
-        loadedSessions.map((s) => reconcilePermissionModeState(s.id))
-      )
-
-      // Mark sessions as loaded for splash screen
-      setSessionsLoaded(true)
-
-      // If window was opened with a specific session (via "Open in New Window"), select it
-      if (initialSessionId && windowWorkspaceId) {
-        const session = loadedSessions.find(s => s.id === initialSessionId)
-        if (session) {
-          navigate(routes.view.allSessions(session.id))
-        }
-      }
+    window.electronAPI.getWorkspaces().then((loaded) => {
+      if (requestId !== readyLoadRequestIdRef.current) return
+      setWorkspaces(loaded)
     })
+    window.electronAPI.getNotificationsEnabled().then((enabled) => {
+      if (requestId !== readyLoadRequestIdRef.current) return
+      setNotificationsEnabled(enabled)
+    })
+    window.electronAPI.getSessions()
+      .then(async (loadedSessions) => {
+        if (requestId !== readyLoadRequestIdRef.current) return
+        // Initialize per-session atoms and metadata map
+        // NOTE: No sessionsAtom used - sessions are only in per-session atoms
+        initializeSessions(loadedSessions)
+        // Initialize unified sessionOptions from session data
+        const optionsMap = new Map<string, SessionOptions>()
+        for (const s of loadedSessions) {
+          // Only store non-default options to keep the map lean
+          const hasNonDefaultMode = s.permissionMode && s.permissionMode !== 'ask'
+          const hasNonDefaultThinking = s.thinkingLevel && s.thinkingLevel !== DEFAULT_THINKING_LEVEL
+          if (hasNonDefaultMode || hasNonDefaultThinking) {
+            optionsMap.set(s.id, {
+              permissionMode: s.permissionMode ?? 'ask',
+              thinkingLevel: s.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
+            })
+          }
+        }
+        setSessionOptions(optionsMap)
+
+        // Reconcile permission mode state from backend diagnostics (mode + modeVersion)
+        await Promise.allSettled(
+          loadedSessions.map((s) => reconcilePermissionModeState(s.id))
+        )
+        if (requestId !== readyLoadRequestIdRef.current) return
+
+        // Mark sessions as loaded for splash screen
+        setSessionsLoaded(true)
+
+        // If window was opened with a specific session (via "Open in New Window"), select it
+        if (initialSessionId && windowWorkspaceId) {
+          const session = loadedSessions.find(s => s.id === initialSessionId)
+          if (session) {
+            navigate(routes.view.allSessions(session.id))
+          }
+        }
+      })
+      .catch((error) => {
+        if (requestId !== readyLoadRequestIdRef.current) return
+        console.error('Failed to load sessions for active workspace:', error)
+        initializeSessions([])
+        setSessionOptions(new Map())
+        setSessionsLoaded(true)
+      })
     // Load LLM connections with authentication status
     window.electronAPI.listLlmConnectionsWithStatus().then((connections) => {
+      if (requestId !== readyLoadRequestIdRef.current) return
       setLlmConnections(connections)
       setDefaultLlmConnectionSlug(resolveDefaultConnectionSlug(connections))
     })
     // Load persisted input drafts into ref (no re-render needed)
     window.electronAPI.getAllDrafts().then((drafts) => {
+      if (requestId !== readyLoadRequestIdRef.current) return
       if (Object.keys(drafts).length > 0) {
         sessionDraftsRef.current = new Map(Object.entries(drafts))
       }
     })
     // Load app-level theme
-    window.electronAPI.getAppTheme().then(setAppTheme)
+    window.electronAPI.getAppTheme().then((theme) => {
+      if (requestId !== readyLoadRequestIdRef.current) return
+      setAppTheme(theme)
+    })
   }, [appState, initialSessionId, windowWorkspaceId, initializeSessions, resolveDefaultConnectionSlug, reconcilePermissionModeState])
+
+  useEffect(() => {
+    if (appState !== 'ready' || !window.electronAPI.onWorkspacesChanged) return
+
+    const refresh = () => {
+      window.electronAPI.getWorkspaces().then(setWorkspaces).catch((error) => {
+        console.error('Failed to refresh workspaces:', error)
+      })
+    }
+
+    const unsubscribe = window.electronAPI.onWorkspacesChanged(refresh)
+    return () => {
+      unsubscribe?.()
+    }
+  }, [appState])
 
   // Subscribe to theme change events (live updates when theme.json changes)
   useEffect(() => {

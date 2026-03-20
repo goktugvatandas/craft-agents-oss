@@ -78,7 +78,7 @@ import { createApplicationMenu } from './menu'
 import { WindowManager } from './window-manager'
 import { loadWindowState, saveWindowState } from './window-state'
 import { getWorkspaces, loadStoredConfig, addWorkspace, saveConfig } from '@craft-agent/shared/config'
-import { getDefaultWorkspacesDir } from '@craft-agent/shared/workspaces'
+import { getDefaultWorkspacesDir, isRemoteWorkspaceTargetId } from '@craft-agent/shared/workspaces'
 import { initializeDocs } from '@craft-agent/shared/docs'
 import { initializeReleaseNotes } from '@craft-agent/shared/release-notes'
 import { ensureDefaultPermissions } from '@craft-agent/shared/agent/permissions-config'
@@ -318,8 +318,9 @@ async function createInitialWindows(): Promise<void> {
     let restoredCount = 0
 
     for (const saved of savedState.windows) {
-      // Skip invalid workspaces
-      if (!validWorkspaceIds.includes(saved.workspaceId)) continue
+      // Skip invalid local workspaces. Remote targets are restored optimistically
+      // because availability depends on per-window remote connections in preload.
+      if (!isRemoteWorkspaceTargetId(saved.workspaceId) && !validWorkspaceIds.includes(saved.workspaceId)) continue
 
       // Restore main window with focused mode if it was saved
       mainLog.info(`Restoring window: workspaceId=${saved.workspaceId}, focused=${saved.focused ?? false}, url=${saved.url ?? 'none'}`)
