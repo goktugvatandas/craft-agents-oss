@@ -298,6 +298,10 @@ export function FreeFormInput({
   const appShellCtx = useOptionalAppShellContext()
   const llmConnections = appShellCtx?.llmConnections ?? []
   const workspaceDefaultConnection = appShellCtx?.workspaceDefaultLlmConnection
+  const activeWorkspace = React.useMemo(() => {
+    if (!appShellCtx || !workspaceId) return null
+    return appShellCtx.workspaces.find(workspace => workspace.id === workspaceId) ?? null
+  }, [appShellCtx, workspaceId])
 
   // Derive connectionDefaultModel per-session from the effective connection.
   // Only non-null for compat providers (custom endpoints with fixed models).
@@ -323,11 +327,15 @@ export function FreeFormInput({
     const connection = llmConnections.find(c => c.slug === effectiveSlug)
 
     if (!connection) {
-      return ANTHROPIC_MODELS // Safety net — shouldn't happen
+      return activeWorkspace?.isRemote ? [] : ANTHROPIC_MODELS
     }
 
-    return connection.models || ANTHROPIC_MODELS
-  }, [llmConnections, currentConnection, workspaceDefaultConnection, connectionUnavailable])
+    if (connection.models && connection.models.length > 0) {
+      return connection.models
+    }
+
+    return activeWorkspace?.isRemote ? [] : ANTHROPIC_MODELS
+  }, [activeWorkspace?.isRemote, connectionUnavailable, currentConnection, llmConnections, workspaceDefaultConnection])
 
   const availableThinkingLevels = THINKING_LEVELS
 
@@ -1813,8 +1821,11 @@ Model
                           </StyledDropdownMenuSubTrigger>
                           {isAuthenticated && (
                             <StyledDropdownMenuSubContent className="min-w-[220px]">
-                              {/* Show models for this connection - use provider-specific models as fallback */}
-                              {(conn.models || ANTHROPIC_MODELS).map((model) => {
+                              {/* Remote scopes must not fall back to local model presets. */}
+                              {((conn.models && conn.models.length > 0)
+                                ? conn.models
+                                : (activeWorkspace?.isRemote ? [] : ANTHROPIC_MODELS)
+                              ).map((model) => {
                                 const modelId = typeof model === 'string' ? model : model.id
                                 const modelName = typeof model === 'string' ? stripPiPrefixForDisplay(getModelShortName(model)) : model.name
                                 const isSelectedModel = isCurrentConnection && currentModel === modelId

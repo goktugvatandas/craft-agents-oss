@@ -139,9 +139,21 @@ function resolveServerPath(hostRuntime: BackendHostRuntimeContext, serverName: s
       join(hostRuntime.appRootPath, 'dist', 'resources', serverName, 'index.js'),
     ]);
   }
-  return resolveUpwards(
-    hostRuntime.appRootPath,
-    join('packages', serverName, 'dist', 'index.js'),
+  return (
+    resolveUpwards(
+      hostRuntime.appRootPath,
+      join('packages', serverName, 'dist', 'index.js'),
+    )
+    // Headless/dev installs often run straight from source via Bun without a
+    // package-local build step, so the TS entrypoint is the real server path.
+    ?? resolveUpwards(
+      hostRuntime.appRootPath,
+      join('packages', serverName, 'src', 'index.ts'),
+    )
+    ?? resolveUpwards(
+      hostRuntime.appRootPath,
+      join('packages', serverName, 'src', 'index.js'),
+    )
   );
 }
 
@@ -232,4 +244,3 @@ export function applyAnthropicRuntimeBootstrap(
     }
   }
 }
-
