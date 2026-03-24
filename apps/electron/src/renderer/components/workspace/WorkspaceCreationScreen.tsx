@@ -12,6 +12,7 @@ import type { Workspace } from "../../../shared/types"
 import type { WorkspaceCreationTarget, RemoteServerProfile } from "../../../shared/types"
 import { toast } from "sonner"
 import { useTransportConnectionState } from "@/hooks/useTransportConnectionState"
+import type { RemoteServerRuntimeState } from "../../../shared/types"
 
 type CreationStep = 'choice' | 'create' | 'open'
 
@@ -39,12 +40,15 @@ export function WorkspaceCreationScreen({
   className
 }: WorkspaceCreationScreenProps) {
   const transportState = useTransportConnectionState()
-  const isDirectRemoteMode = transportState?.mode === 'remote'
   const [step, setStep] = useState<CreationStep>('choice')
   const [isCreating, setIsCreating] = useState(false)
   const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 })
-  const [targetMode, setTargetMode] = useState<'local' | 'remote'>(isDirectRemoteMode ? 'remote' : initialTarget.mode)
   const [remoteServers, setRemoteServers] = useState<RemoteServerProfile[]>([])
+  const [remoteRuntimeStates, setRemoteRuntimeStates] = useState<Record<string, RemoteServerRuntimeState>>({})
+  const isDirectRemoteMode = useMemo(() => {
+    return transportState?.mode === 'remote' && Object.keys(remoteRuntimeStates).length === 0
+  }, [remoteRuntimeStates, transportState?.mode])
+  const [targetMode, setTargetMode] = useState<'local' | 'remote'>(isDirectRemoteMode ? 'remote' : initialTarget.mode)
   const [selectedServerId, setSelectedServerId] = useState<string | null>(initialTarget.serverId ?? null)
 
   const normalizeServerUrl = useCallback((value: string | null | undefined) => {
@@ -74,8 +78,12 @@ export function WorkspaceCreationScreen({
 
     const loadServers = async () => {
       try {
-        const profiles = await window.electronAPI.listRemoteServers()
+        const [profiles, runtimeStates] = await Promise.all([
+          window.electronAPI.listRemoteServers(),
+          window.electronAPI.getRemoteServerRuntimeStates?.() ?? Promise.resolve({}),
+        ])
         if (!mounted) return
+        setRemoteRuntimeStates(runtimeStates)
         const selectable = profiles.filter(profile => profile.enabled && profile.hasToken)
         setRemoteServers(selectable)
         const directRemoteProfile = isDirectRemoteMode
@@ -89,6 +97,7 @@ export function WorkspaceCreationScreen({
       } catch {
         if (mounted) {
           setRemoteServers([])
+          setRemoteRuntimeStates({})
           setSelectedServerId(null)
         }
       }

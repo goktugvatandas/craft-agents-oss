@@ -22,7 +22,7 @@ import { Spinner, FullscreenOverlayBase } from '@craft-agent/ui'
 import { useSetAtom } from 'jotai'
 import { fullscreenOverlayOpenAtom } from '@/atoms/overlay'
 import { motion, AnimatePresence } from 'motion/react'
-import type { LlmConnectionWithStatus, ThinkingLevel, WorkspaceSettings, Workspace, WorkspaceCreationTarget, RemoteServerProfile } from '../../../shared/types'
+import type { LlmConnectionWithStatus, ThinkingLevel, WorkspaceSettings, Workspace, WorkspaceCreationTarget, RemoteServerProfile, RemoteServerRuntimeState } from '../../../shared/types'
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVELS } from '@craft-agent/shared/agent/thinking-levels'
 import type { DetailsPageMeta } from '@/lib/navigation-registry'
 import {
@@ -613,7 +613,6 @@ export default function AiSettingsPage() {
   const appShellContext = useAppShellContext()
   const { refreshLlmConnections } = appShellContext
   const transportState = useTransportConnectionState()
-  const isDirectRemoteMode = transportState?.mode === 'remote'
 
   // API Setup overlay state
   const [showApiSetup, setShowApiSetup] = useState(false)
@@ -632,6 +631,8 @@ export default function AiSettingsPage() {
   // Workspaces for override cards
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [remoteServers, setRemoteServers] = useState<RemoteServerProfile[]>([])
+  const [remoteRuntimeStates, setRemoteRuntimeStates] = useState<Record<string, RemoteServerRuntimeState>>({})
+  const isDirectRemoteMode = transportState?.mode === 'remote' && Object.keys(remoteRuntimeStates).length === 0
   const activeWorkspace = appShellContext.workspaces.find(workspace => workspace.id === appShellContext.activeWorkspaceId) ?? null
   const connectedRemoteProfile = useMemo(() => {
     if (!isDirectRemoteMode) return null
@@ -708,9 +709,11 @@ export default function AiSettingsPage() {
       window.electronAPI.getWorkspaces(),
       window.electronAPI.listRemoteServers(),
     ])
+    const runtimeStates = await window.electronAPI.getRemoteServerRuntimeStates?.() ?? {}
 
     setWorkspaces(loadedWorkspaces)
     setRemoteServers(loadedServers)
+    setRemoteRuntimeStates(runtimeStates)
   }, [])
 
   const refreshScopedAiSettings = useCallback(async () => {

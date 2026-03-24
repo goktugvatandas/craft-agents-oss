@@ -1811,7 +1811,37 @@ Examples:
 export async function main(argv: string[] = process.argv): Promise<void> {
   const args = parseArgs(argv)
 
-  // Set custom CA before any WS connections
+  // NODE_EXTRA_CA_CERTS must be present when the runtime starts.
+  // Re-exec once with the requested CA path so TLS/WebSocket trust picks it up reliably.
+  if (
+    args.tlsCa &&
+    process.env.NODE_EXTRA_CA_CERTS !== args.tlsCa &&
+    process.env.CRAFT_TLS_CA_BOOTSTRAPPED !== '1'
+  ) {
+    const { spawn } = await import('node:child_process')
+    const child = spawn(argv[0]!, argv.slice(1), {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        NODE_EXTRA_CA_CERTS: args.tlsCa,
+        CRAFT_TLS_CA_BOOTSTRAPPED: '1',
+      },
+    })
+
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      child.on('error', reject)
+      child.on('exit', (code, signal) => {
+        if (signal) {
+          resolve(1)
+          return
+        }
+        resolve(code ?? 0)
+      })
+    })
+
+    process.exit(exitCode)
+  }
+
   if (args.tlsCa) {
     process.env.NODE_EXTRA_CA_CERTS = args.tlsCa
   }
