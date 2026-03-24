@@ -190,6 +190,9 @@ function resolveRipgrepPath(hostRuntime: BackendHostRuntimeContext): string | un
 
 export function resolveBackendRuntimePaths(hostRuntime: BackendHostRuntimeContext): ResolvedBackendRuntimePaths {
   const bundledRuntimePath = hostRuntime.nodeRuntimePath || resolveBundledRuntimePath(hostRuntime);
+  const currentBunRuntimePath = process.versions?.bun && process.execPath && existsSync(process.execPath)
+    ? process.execPath
+    : undefined;
 
   return {
     claudeCliPath: resolveClaudeCliPath(hostRuntime),
@@ -199,7 +202,7 @@ export function resolveBackendRuntimePaths(hostRuntime: BackendHostRuntimeContex
     sessionServerPath: resolveServerPath(hostRuntime, 'session-mcp-server'),
     bridgeServerPath: resolveServerPath(hostRuntime, 'bridge-mcp-server'),
     piServerPath: resolveServerPath(hostRuntime, 'pi-agent-server'),
-    nodeRuntimePath: hostRuntime.nodeRuntimePath || bundledRuntimePath || 'bun',
+    nodeRuntimePath: hostRuntime.nodeRuntimePath || bundledRuntimePath || currentBunRuntimePath || 'bun',
     bundledRuntimePath,
   };
 }

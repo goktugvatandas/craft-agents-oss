@@ -70,4 +70,15 @@ describe('resolveServerPath fallback', () => {
     const paths = resolveBackendRuntimePaths(hostRuntime);
     expect(paths.piServerPath).toBe(join(serverDir, 'index.ts'));
   });
+
+  it('uses the current Bun executable for non-packaged runtime fallback', () => {
+    const appRoot = join(tmpBase, 'app4');
+    const hostRuntime: BackendHostRuntimeContext = {
+      appRootPath: appRoot,
+      isPackaged: false,
+    };
+
+    const paths = resolveBackendRuntimePaths(hostRuntime);
+    expect(paths.nodeRuntimePath).toBe(process.execPath);
+  });
 });
