@@ -1171,6 +1171,18 @@ export class SessionManager implements ISessionManager {
       changed = true
     }
 
+    // Archived state
+    const nextArchived = header.isArchived ?? false
+    if ((managed.isArchived ?? false) !== nextArchived || managed.archivedAt !== header.archivedAt) {
+      managed.isArchived = nextArchived
+      managed.archivedAt = header.archivedAt
+      this.sendEvent(
+        { type: nextArchived ? 'session_archived' : 'session_unarchived', sessionId },
+        managed.workspace.id,
+      )
+      changed = true
+    }
+
     if (changed) {
       sessionLog.info(`External metadata change detected for session ${sessionId}`)
 
@@ -1548,6 +1560,12 @@ export class SessionManager implements ISessionManager {
       // Load existing sessions from disk
       this.loadSessionsFromDisk()
 
+      // Headless instances do not necessarily open a workspace window, so they
+      // would otherwise miss external session metadata changes (archive/unarchive,
+      // labels, status) for mirrored workspaces. Start watchers eagerly for every
+      // known workspace so shared workspace state stays in sync across processes.
+      this.setupConfigWatchersForAllWorkspaces()
+
       // Signal that initialization is complete — IPC handlers waiting on initGate will proceed
       this.initGate.markReady()
     } catch (error) {
@@ -1617,6 +1635,12 @@ export class SessionManager implements ISessionManager {
       sessionLog.info(`Loaded ${totalSessions} sessions from disk (metadata only)`)
     } catch (error) {
       sessionLog.error('Failed to load sessions from disk:', error)
+    }
+  }
+
+  private setupConfigWatchersForAllWorkspaces(): void {
+    for (const workspace of getWorkspaces()) {
+      this.setupConfigWatcher(workspace.rootPath, workspace.id)
     }
   }
 
