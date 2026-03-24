@@ -1,10 +1,10 @@
 import { BrowserWindow, shell, nativeTheme, Menu, app } from 'electron'
 import { windowLog } from './logger'
 import { join } from 'path'
-import { existsSync } from 'fs'
 import { release } from 'os'
 import { RPC_CHANNELS, type WindowCloseRequestSource } from '../shared/types'
 import type { SavedWindow } from './window-state'
+import { resolvePlatformAppIconPath } from './app-icon'
 
 // Vite dev server URL for hot reload
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -104,21 +104,10 @@ export class WindowManager {
   createWindow(options: CreateWindowOptions): BrowserWindow {
     const { workspaceId, focused = false, initialDeepLink, restoreUrl } = options
 
-    // Load platform-specific app icon
-    // In packaged app, resources are at dist/resources/ (same level as __dirname)
-    // In dev, resources are at ../resources/ (sibling of dist/)
-    const getIconPath = () => {
-      const iconName = process.platform === 'darwin' ? 'icon.icns'
-        : process.platform === 'win32' ? 'icon.ico'
-        : 'icon.png'
-      return [
-        join(__dirname, 'resources', iconName),
-        join(__dirname, '../resources', iconName),
-      ].find(p => existsSync(p)) ?? join(__dirname, '../resources', iconName)
-    }
-
-    const iconPath = getIconPath()
-    const iconExists = existsSync(iconPath)
+    // Resolve the packaged bundle icon first so fork-branded apps do not get
+    // overridden by the dev resources copied under dist/resources.
+    const iconPath = resolvePlatformAppIconPath()
+    const iconExists = !!iconPath
 
     if (!iconExists) {
       windowLog.warn('App icon not found at:', iconPath)
@@ -171,9 +160,26 @@ export class WindowManager {
       }
     })
 
-    // Show window when first paint is ready (faster perceived startup)
-    window.once('ready-to-show', () => {
+    const showWindow = () => {
+      if (window.isDestroyed() || window.isVisible()) return
       window.show()
+    }
+
+    // Prefer the first paint signal, but do not leave the app stranded if it
+    // never arrives in packaged builds.
+    const showFallbackTimeout = setTimeout(() => {
+      windowLog.warn(`ready-to-show timeout for workspace ${workspaceId}; showing window via fallback`)
+      showWindow()
+    }, 2000)
+
+    window.once('ready-to-show', () => {
+      clearTimeout(showFallbackTimeout)
+      showWindow()
+    })
+
+    window.webContents.once('did-finish-load', () => {
+      clearTimeout(showFallbackTimeout)
+      showWindow()
     })
 
     // Open external links in default browser
@@ -382,6 +388,7 @@ export class WindowManager {
 
     // Handle window closed - clean up theme listener and internal state
     window.on('closed', () => {
+      clearTimeout(showFallbackTimeout)
       // Clean up any pending close timeout to prevent memory leaks
       const timeout = this.pendingCloseTimeouts.get(webContentsId)
       if (timeout) {

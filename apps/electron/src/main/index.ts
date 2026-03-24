@@ -75,9 +75,10 @@ import { WsRpcServer } from '../transport/server'
 import { initModelRefreshService, getModelRefreshService, setFetcherPlatform } from '@craft-agent/server-core/model-fetchers'
 import { setSearchPlatform, setImageProcessor } from '@craft-agent/server-core/services'
 import { createApplicationMenu } from './menu'
+import { resolveDockIconPath } from './app-icon'
 import { WindowManager } from './window-manager'
 import { loadWindowState, saveWindowState } from './window-state'
-import { getWorkspaces, loadStoredConfig, addWorkspace, saveConfig } from '@craft-agent/shared/config'
+import { getWorkspaces, loadStoredConfig, addWorkspace, saveConfig, getStoredRemoteServerProfiles } from '@craft-agent/shared/config'
 import { getDefaultWorkspacesDir, isRemoteWorkspaceTargetId } from '@craft-agent/shared/workspaces'
 import { initializeDocs } from '@craft-agent/shared/docs'
 import { initializeReleaseNotes } from '@craft-agent/shared/release-notes'
@@ -189,9 +190,15 @@ let moduleClientResolver: ((webContentsId: number) => string | undefined) | null
 // Store pending deep link if app not ready yet (cold start)
 let pendingDeepLink: string | null = null
 
-// Set app name early (before app.whenReady) to ensure correct macOS menu bar title
+// Set app name early (before app.whenReady) to ensure correct macOS menu bar title.
+// In packaged builds, prefer the bundle/product name so forked apps get their own
+// menu title and user data path instead of colliding with the official app.
+const detectedAppName = app.getName()
+const defaultAppName = app.isPackaged && detectedAppName && detectedAppName !== '@craft-agent/electron'
+  ? detectedAppName
+  : 'Craft Agents'
 // Supports multi-instance dev: CRAFT_APP_NAME env var (e.g., "Craft Agents [1]")
-app.setName(process.env.CRAFT_APP_NAME || 'Craft Agents')
+app.setName(process.env.CRAFT_APP_NAME || defaultAppName)
 
 // Register as default protocol client for craftagents:// URLs
 // This must be done before app.whenReady() on some platforms
@@ -209,10 +216,13 @@ if (process.defaultApp) {
 import { applyConfiguredProxySettings } from './network-proxy'
 void applyConfiguredProxySettings()
 
-// Accept self-signed / untrusted certificates when connecting to a user-configured remote server.
-// Only bypasses cert validation for the exact CRAFT_SERVER_URL origin — all other connections
-// use standard certificate verification. Without this, wss:// to self-signed servers fails with
-// ERR_CERT_AUTHORITY_INVALID because Chromium's WebSocket rejects untrusted certs.
+// Accept self-signed / untrusted certificates when connecting to configured remote servers.
+// Only bypasses cert validation for exact origins that are either:
+// - the direct thin-client target from CRAFT_SERVER_URL, or
+// - saved remote server profiles from config.
+// All other connections use standard certificate verification. Without this,
+// wss:// to self-signed/private-CA servers fails with ERR_CERT_AUTHORITY_INVALID
+// because Chromium's WebSocket rejects untrusted certs.
 //
 // Electron's certificate-error always reports URLs with https:// scheme, so we normalize
 // wss:// → https:// (and ws:// → http://) to ensure origins compare correctly.
@@ -223,28 +233,42 @@ function normalizeOriginForCert(urlStr: string): string {
   return u.origin
 }
 
-if (process.env.CRAFT_SERVER_URL) {
-  let serverOrigin: string | undefined
+function getTrustedRemoteServerOrigins(): Set<string> {
+  const origins = new Set<string>()
+
   try {
-    serverOrigin = normalizeOriginForCert(process.env.CRAFT_SERVER_URL)
+    if (process.env.CRAFT_SERVER_URL) {
+      origins.add(normalizeOriginForCert(process.env.CRAFT_SERVER_URL))
+    }
   } catch {
-    // Invalid URL — will fail later during connection, no need to handle here
+    // Invalid direct URL — will fail later during connection.
   }
-  if (serverOrigin) {
-    app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
-      try {
-        if (normalizeOriginForCert(url) === serverOrigin) {
-          event.preventDefault()
-          callback(true)
-          return
-        }
-      } catch {
-        // URL parse failure — fall through to default rejection
-      }
-      callback(false)
-    })
+
+  for (const profile of getStoredRemoteServerProfiles()) {
+    try {
+      origins.add(normalizeOriginForCert(profile.url))
+    } catch {
+      // Ignore malformed stored profile URLs here; connection code will surface them elsewhere.
+    }
   }
+
+  return origins
 }
+
+app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
+  try {
+    const origin = normalizeOriginForCert(url)
+    if (getTrustedRemoteServerOrigins().has(origin)) {
+      event.preventDefault()
+      callback(true)
+      return
+    }
+  } catch {
+    // URL parse failure — fall through to default rejection
+  }
+
+  callback(false)
+})
 
 // Register thumbnail:// custom protocol for file preview thumbnails in the sidebar.
 // Must happen before app.whenReady() — Electron requires early scheme registration.
@@ -394,12 +418,7 @@ app.whenReady().then(async () => {
 
   // Set dock icon on macOS (required for dev mode, bundled apps use Info.plist)
   if (process.platform === 'darwin' && app.dock) {
-    // In packaged app, resources are at dist/resources/ (same level as __dirname)
-    // In dev, resources are at ../resources/ (sibling of dist/)
-    const dockIconPath = [
-      join(__dirname, 'resources/icon.png'),
-      join(__dirname, '../resources/icon.png'),
-    ].find(p => existsSync(p))
+    const dockIconPath = resolveDockIconPath()
 
     if (dockIconPath) {
       app.dock.setIcon(dockIconPath)
@@ -712,6 +731,12 @@ app.whenReady().then(async () => {
       const { setNotificationEventSink } = await import('./notifications')
       setNotificationEventSink(moduleSink!, resolveClientId)
 
+      // Open UI windows as soon as transport and handlers are ready. Do not block
+      // the entire app on session/auth initialization, which can be slow or hang.
+      if (!isHeadless) {
+        await createInitialWindows()
+      }
+
       // Initialize auth (must happen after window creation for error reporting)
       await sessionManager!.initialize()
 
@@ -720,8 +745,8 @@ app.whenReady().then(async () => {
     }
 
     // Create initial windows (restores from saved state or opens first workspace)
-    // In headless mode the server runs without any UI — skip window creation.
-    if (!isHeadless) {
+    // In local-server mode this already happened earlier, before auth init.
+    if (!isHeadless && isClientOnly) {
       await createInitialWindows()
     }
 
@@ -896,12 +921,35 @@ app.on('before-quit', async (event) => {
 
 // Handle uncaught exceptions — forward to Sentry explicitly since registering
 // a custom handler can interfere with @sentry/electron's automatic capture.
+function serializeUnknownError(value: unknown): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    }
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    try {
+      return JSON.parse(JSON.stringify(value))
+    } catch {
+      return String(value)
+    }
+  }
+
+  return value
+}
+
 process.on('uncaughtException', (error) => {
-  mainLog.error('Uncaught exception:', error)
+  mainLog.error('Uncaught exception:', serializeUnknownError(error))
   Sentry.captureException(error)
 })
 
 process.on('unhandledRejection', (reason, promise) => {
-  mainLog.error('Unhandled rejection at:', promise, 'reason:', reason)
+  mainLog.error('Unhandled rejection:', {
+    reason: serializeUnknownError(reason),
+    promise: String(promise),
+  })
   Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)))
 })

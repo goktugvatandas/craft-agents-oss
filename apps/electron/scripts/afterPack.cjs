@@ -25,9 +25,16 @@ module.exports = async function afterPack(context) {
     return;
   }
 
+  if (process.env.CRAFT_SKIP_LIQUID_GLASS_ICON === '1') {
+    console.log('Skipping Liquid Glass icon (CRAFT_SKIP_LIQUID_GLASS_ICON=1)');
+    return;
+  }
+
   const appPath = context.appOutDir;
-  const resourcesDir = path.join(appPath, 'Craft Agents.app', 'Contents', 'Resources');
-  const precompiledAssets = path.join(context.packager.projectDir, 'resources', 'Assets.car');
+  const appBundleName = `${context.packager.appInfo.productFilename}.app`;
+  const resourcesDir = path.join(appPath, appBundleName, 'Contents', 'Resources');
+  const assetCarPath = process.env.CRAFT_ASSETS_CAR || 'resources/Assets.car';
+  const precompiledAssets = path.join(context.packager.projectDir, assetCarPath);
 
   console.log(`afterPack: projectDir=${context.packager.projectDir}`);
   console.log(`afterPack: looking for Assets.car at ${precompiledAssets}`);

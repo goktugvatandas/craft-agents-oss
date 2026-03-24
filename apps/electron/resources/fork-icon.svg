@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="144" y1="120" x2="888" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A3D"/>
+      <stop offset="1" stop-color="#E24A2A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="512" y1="192" x2="512" y2="832" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8EA"/>
+      <stop offset="1" stop-color="#FFE1A8"/>
+    </linearGradient>
+    <filter id="shadow" x="136" y="140" width="752" height="744" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="24"/>
+      <feGaussianBlur stdDeviation="24"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.360784 0 0 0 0 0.129412 0 0 0 0 0.0784314 0 0 0 0.26 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="96" y="96" width="832" height="832" rx="220" fill="url(#bg)"/>
+  <path d="M256 804C256 779.699 275.699 760 300 760H724C748.301 760 768 779.699 768 804V820C768 844.301 748.301 864 724 864H300C275.699 864 256 844.301 256 820V804Z" fill="#2E120B" fill-opacity="0.14"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="340" cy="296" r="92" fill="url(#accent)"/>
+    <circle cx="684" cy="296" r="92" fill="url(#accent)"/>
+    <path d="M512 760C463.399 760 424 720.601 424 672V404C424 355.399 463.399 316 512 316C560.601 316 600 355.399 600 404V672C600 720.601 560.601 760 512 760Z" fill="url(#accent)"/>
+    <path d="M465.546 445.254L330.742 334.909C293.138 304.115 288.115 248.707 318.909 211.103C349.703 173.498 405.111 168.476 442.715 199.27L577.519 309.615C615.123 340.409 620.145 395.817 589.352 433.421C558.558 471.026 503.15 476.048 465.546 445.254Z" fill="url(#accent)"/>
+    <path d="M558.454 445.254L693.258 334.909C730.862 304.115 735.885 248.707 705.091 211.103C674.297 173.498 618.889 168.476 581.285 199.27L446.481 309.615C408.877 340.409 403.855 395.817 434.648 433.421C465.442 471.026 520.85 476.048 558.454 445.254Z" fill="url(#accent)"/>
+  </g>
+</svg>

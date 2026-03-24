@@ -1,0 +1,22 @@
+extends: ./electron-builder.yml
+
+appId: dev.goktugvatandas.craft-agent-fork
+productName: Craft Agents Fork
+copyright: Copyright © 2026 goktugvatandas
+
+extraMetadata:
+  main: dist/main.cjs
+  name: craft-agents-fork
+
+mac:
+  icon: resources/fork-icon.icns
+  artifactName: "Craft-Agents-Fork-${arch}.${ext}"
+
+dmg:
+  artifactName: "Craft-Agents-Fork-${arch}.dmg"
+  icon: resources/fork-icon.icns
+  title: "Craft Agents Fork"
+
+linux:
+  icon: resources/fork-icon.png
+  artifactName: "Craft-Agents-Fork-${arch}.${ext}"

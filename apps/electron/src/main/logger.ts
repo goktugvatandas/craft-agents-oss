@@ -12,6 +12,12 @@ import log from 'electron-log/main'
 function resolveDebugMode(): boolean {
   if (process.argv.includes('--debug')) return true
 
+  // Keep packaged fork builds observable during local development.
+  // Finder launches still expose the bundle identifier via __CFBundleIdentifier.
+  if (process.env.__CFBundleIdentifier === 'dev.goktugvatandas.craft-agent-fork') {
+    return true
+  }
+
   const packagedEnv = process.env.CRAFT_IS_PACKAGED
   if (packagedEnv === 'true') return false
   if (packagedEnv === 'false') return true

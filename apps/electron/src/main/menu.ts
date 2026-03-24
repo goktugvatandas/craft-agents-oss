@@ -47,6 +47,7 @@ export async function rebuildMenu(): Promise<void> {
 
   const windowManager = cachedWindowManager
   const isMac = process.platform === 'darwin'
+  const appName = app.getName() || 'Craft Agents'
 
   // On Windows/Linux, hide the native menu entirely
   // Users access menu via the Craft logo dropdown in the app
@@ -78,9 +79,9 @@ export async function rebuildMenu(): Promise<void> {
   const template: Electron.MenuItemConstructorOptions[] = [
     // App menu (macOS only)
     ...(isMac ? [{
-      label: 'Craft Agents',
+      label: appName,
       submenu: [
-        { role: 'about' as const, label: 'About Craft Agents' },
+        { role: 'about' as const, label: `About ${appName}` },
         updateMenuItem,
         { type: 'separator' as const },
         {
@@ -90,11 +91,11 @@ export async function rebuildMenu(): Promise<void> {
           click: () => sendToRenderer(RPC_CHANNELS.menu.OPEN_SETTINGS)
         },
         { type: 'separator' as const },
-        { role: 'hide' as const, label: 'Hide Craft Agents' },
+        { role: 'hide' as const, label: `Hide ${appName}` },
         { role: 'hideOthers' as const },
         { role: 'unhide' as const },
         { type: 'separator' as const },
-        { role: 'quit' as const, label: 'Quit Craft Agents' }
+        { role: 'quit' as const, label: `Quit ${appName}` }
       ]
     }] : []),
 
