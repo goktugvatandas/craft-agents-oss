@@ -32,6 +32,7 @@ export const CHANNEL_MAP = {
   respondToCredential: invoke(RPC_CHANNELS.sessions.RESPOND_TO_CREDENTIAL),
   sessionCommand: invoke(RPC_CHANNELS.sessions.COMMAND),
   getPendingPlanExecution: invoke(RPC_CHANNELS.sessions.GET_PENDING_PLAN_EXECUTION),
+  getPendingPermissions: invoke(RPC_CHANNELS.sessions.GET_PENDING_PERMISSIONS),
   getSessionPermissionModeState: invoke(RPC_CHANNELS.sessions.GET_PERMISSION_MODE_STATE),
 
   // Event listeners

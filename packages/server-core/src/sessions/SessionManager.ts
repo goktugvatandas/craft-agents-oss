@@ -67,7 +67,7 @@ import { toolMetadataStore, getLastApiError } from '@craft-agent/shared/intercep
 import { isParentTaskTool } from '@craft-agent/shared/utils/toolNames'
 import { getCredentialManager } from '@craft-agent/shared/credentials'
 import { CraftMcpClient, McpClientPool, McpPoolServer } from '@craft-agent/shared/mcp'
-import { type Session, type SessionEvent, type FileAttachment, type SendMessageOptions, type UnreadSummary, RPC_CHANNELS, generateMessageId } from '@craft-agent/shared/protocol'
+import { type Session, type SessionEvent, type FileAttachment, type SendMessageOptions, type UnreadSummary, type PermissionRequest, RPC_CHANNELS, generateMessageId } from '@craft-agent/shared/protocol'
 import { messageToStored, storedToMessage, type Message, type StoredAttachment, type ToolDisplayMeta } from '@craft-agent/core/types'
 import { formatPathsToRelative, formatToolInputPaths, perf, encodeIconToDataUrlAsync, getEmojiIcon, resetSummarizationClient, resolveToolIcon, readFileAttachment, selectSpreadMessages, normalizePath } from '@craft-agent/shared/utils'
 import { loadAllSkills, loadSkillBySlug, type LoadedSkill } from '@craft-agent/shared/skills'
@@ -1052,6 +1052,7 @@ export class SessionManager implements ISessionManager {
   // Permission request metadata tracking (keyed by requestId)
   private pendingPermissionRequests: Map<string, {
     sessionId: string
+    request: PermissionRequest
     type?: 'bash' | 'file_write' | 'mcp_mutation' | 'api_mutation' | 'admin_approval'
     commandHash?: string
   }> = new Map()
@@ -3129,6 +3130,11 @@ export class SessionManager implements ISessionManager {
 
         this.pendingPermissionRequests.set(request.requestId, {
           sessionId: managed.id,
+          request: {
+            ...request,
+            ...brokerMetadata,
+            sessionId: managed.id,
+          },
           type: request.type,
           commandHash: effectiveCommandHash,
         })
@@ -3159,7 +3165,7 @@ export class SessionManager implements ISessionManager {
         this.sendEvent({
           type: 'permission_request',
           sessionId: managed.id,
-          request: {
+          request: this.pendingPermissionRequests.get(request.requestId)?.request ?? {
             ...request,
             ...brokerMetadata,
             sessionId: managed.id,
@@ -5630,6 +5636,22 @@ export class SessionManager implements ISessionManager {
       sessionLog.warn(`Cannot respond to credential - no pending request for ${requestId}`)
       return false
     }
+  }
+
+  getPendingPermissionRequests(sessionId: string): PermissionRequest[] {
+    const managed = this.sessions.get(sessionId)
+    if (!managed?.agent) {
+      return []
+    }
+
+    const requests: PermissionRequest[] = []
+    for (const pending of this.pendingPermissionRequests.values()) {
+      if (pending.sessionId === sessionId) {
+        requests.push(pending.request)
+      }
+    }
+
+    return requests
   }
 
   /**

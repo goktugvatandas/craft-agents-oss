@@ -508,6 +508,7 @@ export class WorkspaceTransportBroker {
       return this.invokeActive(RPC_CHANNELS.sessions.COMMAND, sessionId, command) as Promise<any>
     }
     this.api.getPendingPlanExecution = async (sessionId: string) => this.invokeActive(RPC_CHANNELS.sessions.GET_PENDING_PLAN_EXECUTION, sessionId) as Promise<any>
+    this.api.getPendingPermissions = async (sessionId: string) => this.invokeActive(RPC_CHANNELS.sessions.GET_PENDING_PERMISSIONS, sessionId) as Promise<any>
     this.api.getSessionPermissionModeState = async (sessionId: string) => this.invokeActive(RPC_CHANNELS.sessions.GET_PERMISSION_MODE_STATE, sessionId) as Promise<any>
     this.api.markAllSessionsRead = async (workspaceId: string) => {
       await this.invokeForWorkspace(workspaceId, RPC_CHANNELS.sessions.MARK_ALL_READ)
