@@ -210,10 +210,13 @@ if (process.defaultApp) {
 import { applyConfiguredProxySettings } from './network-proxy'
 void applyConfiguredProxySettings()
 
-// Accept self-signed / untrusted certificates when connecting to a user-configured remote server.
-// Only bypasses cert validation for the exact CRAFT_SERVER_URL origin — all other connections
-// use standard certificate verification. Without this, wss:// to self-signed servers fails with
-// ERR_CERT_AUTHORITY_INVALID because Chromium's WebSocket rejects untrusted certs.
+// Accept self-signed / untrusted certificates when connecting to configured remote servers.
+// Only bypasses cert validation for exact origins that are either:
+// - the direct thin-client target from CRAFT_SERVER_URL, or
+// - saved remote workspace server URLs from config.
+// All other connections use standard certificate verification. Without this,
+// wss:// to self-signed/private-CA servers fails with ERR_CERT_AUTHORITY_INVALID
+// because Chromium's WebSocket rejects untrusted certs.
 //
 // Electron's certificate-error always reports URLs with https:// scheme, so we normalize
 // wss:// → https:// (and ws:// → http://) to ensure origins compare correctly.
@@ -224,28 +227,45 @@ function normalizeOriginForCert(urlStr: string): string {
   return u.origin
 }
 
-if (process.env.CRAFT_SERVER_URL) {
-  let serverOrigin: string | undefined
+function getTrustedRemoteServerOrigins(): Set<string> {
+  const origins = new Set<string>()
+
   try {
-    serverOrigin = normalizeOriginForCert(process.env.CRAFT_SERVER_URL)
+    if (process.env.CRAFT_SERVER_URL) {
+      origins.add(normalizeOriginForCert(process.env.CRAFT_SERVER_URL))
+    }
   } catch {
-    // Invalid URL — will fail later during connection, no need to handle here
+    // Invalid direct URL — will fail later during connection.
   }
-  if (serverOrigin) {
-    app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
-      try {
-        if (normalizeOriginForCert(url) === serverOrigin) {
-          event.preventDefault()
-          callback(true)
-          return
-        }
-      } catch {
-        // URL parse failure — fall through to default rejection
-      }
-      callback(false)
-    })
+
+  for (const workspace of loadStoredConfig()?.workspaces ?? []) {
+    const remoteUrl = workspace.remoteServer?.url
+    if (!remoteUrl) continue
+
+    try {
+      origins.add(normalizeOriginForCert(remoteUrl))
+    } catch {
+      // Ignore malformed stored remote URLs here; connection code will surface them elsewhere.
+    }
   }
+
+  return origins
 }
+
+app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
+  try {
+    const origin = normalizeOriginForCert(url)
+    if (getTrustedRemoteServerOrigins().has(origin)) {
+      event.preventDefault()
+      callback(true)
+      return
+    }
+  } catch {
+    // URL parse failure — fall through to default rejection
+  }
+
+  callback(false)
+})
 
 // Register thumbnail:// custom protocol for file preview thumbnails in the sidebar.
 // Must happen before app.whenReady() — Electron requires early scheme registration.
